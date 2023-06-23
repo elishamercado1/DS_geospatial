@@ -1,0 +1,248 @@
+---
+title: "02 London Borough Accessibility to OS Open Greenspace"
+output: html_notebook
+---
+
+Quantifying London Borough-accessibility to a subset of OS Open Greenspace.
+
+---
+
+```{r}
+library(sf)
+library(tmap)
+```
+
+## Create data frame from GeoPackage (GPKG)
+
+Combine file reading and subset by bounding box.
+
+```{r}
+# Creating bounding box
+bbox <- st_bbox(c(xmin = 503568.1996, 
+                  xmax = 561957.4962, 
+                  ymin = 155850.7975, 
+                  ymax = 200933.9026), 
+                crs = st_crs(27700))
+
+# Convert into a 'geometry'
+bbox <- st_as_sfc(bbox)
+
+# Create an sf data.frame object from the Greenspace file
+osogs <- st_read('../../data/ordnance-survey/os-open-greenspace-gb.gpkg',
+                 layer = 'greenspace_site',
+                 wkt_filter = st_as_text(bbox))  # Subset the data to Greater London
+```
+
+```{r}
+# Data frame row count
+nrow(osogs)
+```
+
+## Subset data frame by function
+
+Filter OS Open Greenspace retaining only features where the function column is
+equal to 'Playing Field' or 'Public Park And Garden'.
+
+```{r}
+# Subset data frame by function and select columns
+osogs_filtered <- osogs[osogs$function. %in% c('Playing Field', 'Public Park And Garden'), 
+                        c('id', 'function.', 'geometry')]  # Subset columns
+```
+
+```{r}
+nrow(osogs_filtered)
+```
+
+## Administrative Boundaries
+
+```{r}
+# Create a data frame from a GeoPackage
+lad <- st_read('../../data/office-for-national-statistics/local-authority-districts-dec-2021-gb-bfc.gpkg')
+```
+
+```{r}
+# Names of attributes
+names(lad)
+```
+
+```{r}
+# Return head of data frame
+head(lad)
+```
+
+```{r}
+# Count number of rows
+nrow(lad)
+```
+
+## Visualise the Local Authority boundaries
+
+```{r}
+# Create plot of LAD data frame
+tm_shape(lad) +
+  tm_polygons(col = '#af58ba') +
+  tm_layout(title = 'Local Authority District (LAD) Boundaries 2021')
+```
+
+## Rename columns
+
+Makes later steps to merge data easier.
+
+```{r}
+# Rename columns
+names(lad)[which(names(lad) == 'LAD21CD')] <- 'lad21cd'
+names(lad)[which(names(lad) == 'LAD21NM')] <- 'lad21nm'
+```
+
+```{r}
+# Select subset of columns
+lad <- lad[, c('lad21cd', 'lad21nm', 'SHAPE')]
+```
+
+```{r}
+# Count geometry by type
+table(st_geometry_type(lad))
+```
+
+```{r}
+# Check geometry validity
+table(st_is_valid(lad))
+```
+
+## Spatial overlay
+
+Compute the intersection (shared geometry) between OS Greenspace and Local
+Authority District boundaries.
+
+```{r}
+# Compute intersection of LAD and greenspace polygons
+osogs_filtered2lad <- st_intersection(osogs_filtered, lad)
+
+# Return the head of the data frame
+head(osogs_filtered2lad)
+```
+
+## Add `area` column
+
+```{r}
+# Calculate area of each shared geography part
+osogs_filtered2lad$area <- st_area(osogs_filtered2lad)
+```
+
+```{r}
+# List columns
+names(osogs_filtered2lad)
+```
+
+## Sum area by Local Authority District
+
+```{r}
+# Aggregate the green space area by the LAD boundary ID
+osogs_filtered2lad_grouped <- aggregate(list('area' = osogs_filtered2lad$area),
+                                        by = list('lad21cd' = osogs_filtered2lad$lad21cd,
+                                                  'lad21nm' = osogs_filtered2lad$lad21nm),
+                                        sum)
+
+# Return data frame head
+head(osogs_filtered2lad_grouped)
+```
+
+## Mid-year population estimates
+
+```{r}
+# Read CSV table into a data frame
+pop_est <- read.csv('../../data/office-for-national-statistics/uk-population-estimates-mid-2021-mye2-persons.csv')
+
+# Return head of data frame
+head(pop_est)
+```
+
+```{r}
+# Names of attributes
+names(pop_est)
+```
+
+```{r}
+# Count Geography values
+table(pop_est$Geography)
+```
+
+## Subset data frame to London Boroughs
+
+```{r}
+# Subset data frame by geography and select columns
+pop_est <- pop_est[pop_est$Geography == 'London Borough', 
+                   c('Code', 'Name', 'All.ages')]
+```
+
+```{r}
+# Rename columns
+names(pop_est) <- c('lad21cd', 'lad21nm', 'population')
+```
+
+```{r}
+# Return head of data frame
+head(pop_est)
+```
+
+## Merge data frames by attribute
+
+Combine all data frames by LAD code.
+
+```{r}
+# First merge between Greenspace and population
+osogs_pop_est_lad_merged <- merge(osogs_filtered2lad_grouped,
+                                  pop_est,
+                                  by = 'lad21cd', 
+                                  all.x = F) # Inner join
+
+# Second merge to LAD
+osogs_pop_est_lad_merged <- merge(osogs_pop_est_lad_merged,
+                                  lad,
+                                  by = 'lad21cd',
+                                  all.x = F)
+
+# Subset columns
+osogs_pop_est_lad_merged <- osogs_pop_est_lad_merged[, c('lad21cd', 'lad21nm', 'area', 'population', 'SHAPE')]
+
+# Return data frame head
+head(osogs_pop_est_lad_merged)
+```
+
+## Calculate Greenspace area per person
+
+```{r}
+osogs_pop_est_lad_merged$area2population <- osogs_pop_est_lad_merged$area / 
+                                              osogs_pop_est_lad_merged$population
+```
+
+```{r}
+# List names of attributes
+names(osogs_pop_est_lad_merged)
+```
+
+## Create `sf` object from data frame
+
+Merging steps converted the `sf` object to an ordinary data frame.
+
+```{r}
+# Check object type
+class(osogs_pop_est_lad_merged)
+```
+
+```{r}
+osogs_pop_est_lad_merged <- st_as_sf(osogs_pop_est_lad_merged,
+                                     geometry = osogs_pop_est_lad_merged$SHAPE,
+                                     crs = 27700)
+
+# Return head of data frame
+head(osogs_pop_est_lad_merged)
+```
+
+## Save `sf` object to GeoPackage
+
+```{r}
+st_write(osogs_pop_est_lad_merged, 
+         dsn = '../../data/lad-os-open-greenspace-area-per-head.gpkg', 
+         driver = 'GPKG')
+```

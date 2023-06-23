@@ -1,0 +1,125 @@
+---
+title: "06 Add an Overlay to an Interactive Map"
+output: html_notebook
+---
+
+Using the `sf` and `tmap` packages to  overlay a spatial object ontop of a
+leaflet map with an OS Maps API base map.
+
+---
+
+## `tmap`
+
+The [`tmap`](https://r-tmap.github.io/tmap/) R package is providing a wrapper
+around the JavaScript web mapping library [Leaflet.js](https://leafletjs.com/).
+It allows the visualisation of geospatial data in R on an interactive leaflet
+map.
+
+```{r}
+library(sf)
+library(tmap)
+```
+
+## Create `sf` object from GeoPackage (GPKG)
+
+```{r}
+# Create an sf data.frame object from the Greenspace file
+osogs <- st_read('../../data/ordnance-survey/os-open-greenspace-gb.gpkg',
+                 layer = 'greenspace_site')
+```
+
+## Spatially subset data frame
+
+Using coordinate-based indexer to spatially subset by bounding box (BBOX).
+
+```{r}
+# Subset the data by intersection with BBOX
+
+# Greater London bounding box
+bbox <- st_bbox(c(xmin = 503568.1996, 
+                  xmax = 561957.4962, 
+                  ymin = 155850.7975, 
+                  ymax = 200933.9026), 
+                crs = st_crs(27700))
+
+# Convert into a 'geometry'
+bbox <- st_as_sfc(bbox)
+
+# Spatial subsetting/filtering
+osogs_filtered <- osogs[bbox, ]
+```
+
+## OS Maps API ZXY resource
+
+```{r}
+# Reproject to Web Mercator (EPSG: 3857)
+osogs_filtered <- st_transform(osogs_filtered, crs = 3857)
+```
+
+```{r}
+# Basic plot using tmap
+p <- tm_shape(osogs_filtered) +
+  tm_fill(col = '#00cd6c') +
+  tm_layout(frame = FALSE)
+```
+
+```{r}
+# OS Maps API layer
+# Example uses Light Style in Web Mercator (EPSG:3857) projection
+layer <- 'Light_3857'
+
+# OS Data Hub project API key
+key <- '7UTXMMWsGjjIzcBmLdAGnMO6WEAQi9Ng'
+
+# Define the tile server parameters for the basemap
+url <- paste0('https://api.os.uk/maps/raster/v1/zxy/', layer,
+              '/{z}/{x}/{y}.png?key=', key)
+```
+
+## Create custom interactive map
+
+```{r, fig.width = 10, fig.height = 10}
+# Change plotting mode from static to interactive
+tmap_mode('view')
+
+# Combine the features and base map
+final_plot <- p +
+                tm_basemap(server = url)
+
+final_plot
+```
+
+```{r}
+# Change back to the static plotting mode
+tmap_mode('plot')
+```
+
+## Alternative method using `leaflet`
+
+Demonstration using a different `R` package.
+
+```{r}
+library(leaflet)
+library(dplyr)
+```
+
+## Create custom map
+
+```{r}
+# m is the map object all other layers will be added to.
+m <- leaflet() %>%
+  setView(lng = -0.105, lat = 51.507, zoom = 12)
+```
+
+```{r, fig.width = 10, fig.height = 10}
+m <- m %>% 
+  addTiles(urlTemplate = url,
+           attribution = paste0('Contains OS data © Crown copyright and database right ', 
+                                format(Sys.Date(), "%Y")),
+           group = 'OS Maps') %>%
+  addPolygons(data = st_transform(osogs_filtered, 4326),
+              color = '#00cd6c')
+
+# Return map
+m
+```

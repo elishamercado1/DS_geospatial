@@ -1,0 +1,150 @@
+---
+title: "05 Display an Interactive Map"
+output: html_notebook
+---
+
+Using the `tmap` package to display a basic interactive map using the OS Data
+Hub OS Maps API.
+
+## `tmap`
+
+The [`tmap`](https://r-tmap.github.io/tmap/) R package is providing a wrapper
+around the JavaScript web mapping library [Leaflet.js](https://leafletjs.com/).
+It allows the visualisation of geospatial data in R on an interactive leaflet
+map. The R package [`leaflet`](https://rstudio.github.io/leaflet/) is an
+alternative tool for generative interactive maps.
+
+## OS Data Hub
+
+The OS Data Hub is the new data portal to access Ordnance Survey (OS) data. Data
+can be downloaded through a user interact or programmatically via a series of
+APIs enabling direct integration with software applications.
+
+The OS Data Hub [Public Sector
+Plan](https://www.ordnancesurvey.co.uk/business-government/public-sector-geospatial-agreement/data-hub-for-public-sector)
+provides [PSGA
+members](https://www.ordnancesurvey.co.uk/business-government/sectors/public-sector)
+with unlimited access to OS OpenData and OS Premium data available under the
+PSGA via API or download.
+
+## OS Maps API
+
+The [OS Maps API](https://osdatahub.os.uk/docs/wmts/overview) is a mapping API
+available through the OS Data Hub. It allows OS base mapping to be embedded into
+mapping applications including a [tiled web
+map](https://en.wikipedia.org/wiki/Tiled_web_map) or slippy map in R. The API
+serves pre-rendered raster tiles in two coordinate reference systems (CRS),
+British National Grid ([EPSG:27700](https://epsg.io/27700)) and Web Mercator
+([EPSG:3857](https://epsg.io/3857)) which geospatial data can be overlayed onto
+of. The raster tiles are also available in a range of styles to support
+different geodata visualisation use cases.
+
+Use of the OS Maps API for both OpenData and Premium data map views is free to
+the Public Sector but requests still require an [API
+key](https://en.wikipedia.org/wiki/Application_programming_interface_key) for
+authenitcation. If you do not have access to the OS Data Hub under the Public
+Sector plan then you can still use the OS Maps API for free via the [OS OpenData
+plan](https://osdatahub.os.uk/plans).
+
+## ZXY vs WMTS
+
+The OS Maps API offers two different resources, ZXY and Web Map Tile Service
+(WMTS). Both resources are supported by `R` but the code required to integrate
+a ZXY resource is less verbose and preferred.
+
+With the ZXY resource the Z, X and Y provide the indices of a pre-rendered
+mapping tile within a request. Leaflet translates the extent of the map for a
+given zoom level (Z) into a series of API requests that will download the tiles
+required to fill the extent.
+
+---
+
+```{r}
+library(tmap)
+```
+
+## OS Maps API ZXY resource
+
+```{r}
+# OS Maps API layer
+# Example uses Outdoor Style in Web Mercator (EPSG:3857) projection
+layer <- 'Outdoor_3857'
+
+# Other options: 'Road_27700', 'Road_3857', 'Outdoor_27700', 'Outdoor_3857', Light_3857, 'Light_27700', 'Leisure_27700'
+
+# OS Data Hub project API key
+key <- '7UTXMMWsGjjIzcBmLdAGnMO6WEAQi9Ng'
+```
+
+```{r}
+# Define the tile server parameters for the basemap
+url <- paste0('https://api.os.uk/maps/raster/v1/zxy/', layer,
+              '/{z}/{x}/{y}.png?key=', key)
+```
+
+## Create custom map
+
+```{r, fig.width = 10, fig.height = 10}
+# Change plotting mode from static to interactive
+tmap_mode('view')
+
+# Display an interactive map
+tm_tiles(server = url)
+```
+
+```{r}
+# Change back to the static plotting mode
+tmap_mode('plot')
+```
+
+---
+
+## Alternative method using `leaflet`
+
+Demonstration using a different `R` package.
+
+```{r}
+library(leaflet)
+library(leafem)
+library(dplyr)
+```
+
+```{r}
+# OS Maps API layer
+# Example uses Light Style in Web Mercator (EPSG:3857) projecdtion
+layer <- 'Light_3857'
+
+# OS Data Hub project API key
+key <- '7UTXMMWsGjjIzcBmLdAGnMO6WEAQi9Ng'
+```
+
+```{r}
+# Define the tile server parameters for the basemap
+url <- paste0('https://api.os.uk/maps/raster/v1/zxy/', layer,
+              '/{z}/{x}/{y}.png?key=', key)
+```
+
+```{r}
+# OS Logo image
+logo_url <- 'https://raw.githubusercontent.com/OrdnanceSurvey/os-api-branding/master/img/os-logo-maps.svg'
+```
+
+## Create custom map
+
+```{r}
+# m is the map object all other layers will be added to.
+m <- leaflet() %>%
+  setView(lng = -0.105, lat = 51.507, zoom = 12)
+```
+
+```{r, fig.width = 10, fig.height = 10}
+m <- m %>% 
+  addTiles(urlTemplate = url,
+           attribution = paste0('Contains OS data © Crown copyright and database right ', 
+                                format(Sys.Date(), "%Y")),
+           group = 'OS Maps') %>%
+  addLogo(logo_url, url = 'https://www.ordnancesurvey.co.uk/')
+
+# Return map
+m
+```

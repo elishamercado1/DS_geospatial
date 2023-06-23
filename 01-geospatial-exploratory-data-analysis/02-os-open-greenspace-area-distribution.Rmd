@@ -1,0 +1,143 @@
+---
+title: "02 OS Open Greenspace Area Distribution"
+output: html_notebook
+---
+
+Analysing the distribution of OS Open Greenspace areas.
+
+```{r}
+library(sf)
+library(ggplot2)
+```
+
+## Create an `sf` object from GeoPackage (GPKG)
+
+```{r}
+# Create an sf data.frame object from the Greenspace file
+osogs <- st_read('../../data/ordnance-survey/os-open-greenspace-gb.gpkg',
+                 layer = 'greenspace_site')
+```
+
+## Add `area` column to data frame
+
+```{r}
+# Add a new column containing the area of each feature.
+osogs$area <- st_area(osogs)
+
+# The units of the area are determined by the units of the CRS.
+# Set to a numeric value
+osogs$area <- as.numeric(osogs$area)
+```
+
+```{r}
+# Return data.frame columns
+names(osogs)
+```
+
+## Filter data frame
+
+Subset the `sf` object retaining rows where the column `function.` is equal to
+`Playing Field`.
+
+```{r}
+osogs_filtered <- osogs[osogs$function. == 'Playing Field', ]
+```
+
+## Plot histogram showing the distribution of areas
+
+Visualise the distribution of `area` values for the filtered subset of OS Open
+Greenspace features using a histogram.
+
+```{r}
+# Create figure using ggplot2
+ggplot(data = osogs_filtered, aes(x = area)) +
+  geom_histogram(bins = 50, fill = 'lightblue') +
+  xlab('Area') + 
+  ylab('Frequency') + 
+  ggtitle('Distribution of OS Open Greenspace Playing Field Areas')
+```
+
+```{r}
+# Plot histogram showing a subset of records
+ggplot(data = osogs_filtered, aes(x = area)) +
+  geom_histogram(bins = 100, fill = 'lightblue') +
+  xlab('Area') + 
+  ylab('Frequency') + 
+  xlim(0, 200000) +  # Remove right tail
+  ggtitle('Distribution of OS Open Greenspace Playing Field Areas')
+```
+
+## Plot boxplot showing the distribution of areas
+
+Visualise the distribution of `area` values for the filtered subset of OS Open
+Greenspace features using a boxplot.
+
+```{r}
+# Create figure using ggplot2
+ggplot(osogs_filtered, aes(y = area)) + 
+  geom_boxplot() +
+  ylab('Area') + 
+  ggtitle('Distribution of OS Open Greenspace Playing Field Areas')
+```
+
+## Sum area by function
+
+Calculate the sum of the `area` values of OS Open Greenspace features by
+function.
+
+```{r}
+# Using base R 'aggregate' function instead of dplyr (group, summarise) syntax
+# list arg allows to name column something sensible
+osogs_grouped <- aggregate(list('area' = osogs$area),  # The column to summarize
+                           by = list('function.' = osogs$function.),  # The categories
+                           FUN = 'sum')  # The Function to apply
+
+head(osogs_grouped)
+```
+
+## Plot barchart showing total area by function
+
+Visualise the total area of OS Open Greenspace features by function using a bar
+plot.
+
+```{r}
+# Plot bar chart showing sum of areas by function
+ggplot(osogs_grouped, aes(x = function., y = area)) + 
+  geom_bar(fill = 'blue',
+           stat = 'identity') +  # `identity` needed because values are pre-calculated
+  ylab('Area') + 
+  xlab(NULL) + 
+  ggtitle('Total Area of OS Open Greenspace by Function') +
+  theme(axis.text.x = element_text(angle = 90, 
+                                   vjust = 0.5, 
+                                   hjust = 1)) 
+```
+
+## Plot histogram subplots showing the distribution of areas by function
+
+Visualise the distribution of `area` values for OS Open Greenspace features by
+function using histogram subplots.
+
+```{r}
+# Count the number of unique function values
+length(unique(osogs$function.))
+```
+
+```{r}
+# Return unique function values
+unique(osogs$function.)
+```
+
+```{r, fig.width = 8, fig.height = 10}
+# Plot functions
+ggplot(osogs, aes(x = area)) +
+  geom_histogram(fill = 'blue',
+                 bins = 100) + 
+  facet_wrap(~ function., 
+             scales = 'free',
+             labeller = labeller(function. = label_wrap_gen(10))) +
+  xlab('Area') +
+  ylab('Frequency') +
+  theme_bw() +
+  ggtitle('OS Open Greenspace Area Distributions by Function')
+```

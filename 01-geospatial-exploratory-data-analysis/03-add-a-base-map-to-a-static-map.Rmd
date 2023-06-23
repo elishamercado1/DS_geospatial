@@ -1,0 +1,138 @@
+---
+title: "03 Add a Base Map to a Static Map"
+output: html_notebook
+---
+
+Using the `maptiles` package to add an OS Maps API base map to a plot of an `sf`
+`data.frame`.
+
+## `maptiles`
+
+[`maptiles`](https://cran.r-project.org/package=maptiles) allows pre-rendered
+web mapping tiles to be easily added to a data.frame plot as a base map.
+
+## OS Data Hub
+
+The OS Data Hub is the new data portal to access Ordnance Survey (OS) data. Data
+can be downloaded through a user interface or programmatically via a series of
+APIs enabling direct integration with software applications.
+
+The OS Data Hub [Public Sector
+Plan](https://www.ordnancesurvey.co.uk/business-government/public-sector-geospatial-agreement/data-hub-for-public-sector)
+provides [PSGA
+members](https://www.ordnancesurvey.co.uk/business-government/sectors/public-sector)
+with unlimited access to OS OpenData and OS Premium data available under the
+PSGA via API or download.
+
+---
+
+```{r}
+library(sf)
+library(tmap)
+library(maptiles)
+```
+
+## Create an `sf` object from GeoPackage (GPKG)
+
+```{r}
+# Create an sf data.frame object from the Greenspace file
+osogs <- st_read('../../data/ordnance-survey/os-open-greenspace-gb.gpkg',
+                 layer = 'greenspace_site')
+```
+
+## Spatially subset data frame
+
+Using coordinates to spatially subset by bounding box (BBOX).
+
+```{r}
+# Subset the data by intersection with BBOX
+
+# Greater London bounding box
+bbox <- st_bbox(c(xmin = 503568.1996, 
+                  xmax = 561957.4962, 
+                  ymin = 155850.7975, 
+                  ymax = 200933.9026), 
+                crs = st_crs(27700))
+
+# Convert into a 'geometry' sfc = simple feature collection
+bbox <- st_as_sfc(bbox)
+
+# Spatial subsetting/filtering rows - does polygon touch any part of bounding box?
+osogs <- osogs[bbox, ]
+```
+
+```{r}
+# Row count
+nrow(osogs)
+```
+
+```{r}
+# Reproject to Web Mercator (EPSG: 3857)
+# Prepare for basemap tiles
+osogs <- st_transform(osogs, crs = 3857)
+```
+
+## Plot `sf` data frame
+
+```{r}
+# Demonstrate basic plotting using the built-in functions
+plot(st_geometry(osogs), col = '#00cd6c', border = NA)
+```
+
+```{r}
+# Basic plot using tmap
+p <- tm_shape(osogs) +
+  tm_fill(col = '#00cd6c') +
+  tm_layout(title = 'Spatial Distribution of OS Open Greenspace in Greater London Authority',
+            frame = FALSE)
+
+p
+```
+
+## Add OS Maps API base map to `tmap` plot
+
+```{r}
+# OS Maps API layer
+# Example uses Light Style in Web Mercator (EPSG:3857) projection
+layer <- 'Light_3857'
+
+# OS Data Hub project API key
+key <- '7UTXMMWsGjjIzcBmLdAGnMO6WEAQi9Ng'
+
+# OS Data Hub base path - https://api.os.uk
+# OS Maps API ZXY endpoint path - /maps/raster/v1/zxy/
+url <- paste0('https://api.os.uk/maps/raster/v1/zxy/', layer,
+              '/{z}/{x}/{y}.png?key=XXXXXX')  # Note the placeholder key
+```
+
+```{r}
+# Define the tile server parameters for maptiles
+osmaps <- list(src = 'OS Maps',
+               q = url,
+               sub = '',
+               cit = paste0('Contains OS data © Crown copyright and database rights ', 
+                            format(Sys.Date(),"%Y"), '.'))
+```
+
+```{r}
+# Download tiles and compose base map raster
+tile_maps <- get_tiles(x = st_bbox(osogs),
+                       provider = osmaps,
+                       zoom = 10,  # If omitted, will search for 'best' zoom
+                       crop = TRUE,
+                       cachedir = tempdir(),  # Where to store the download
+                       apikey = key,
+                       verbose = FALSE)
+```
+
+```{r, fig.width = 10, fig.height = 10}
+# Add basemap to the tmap
+final_plot <- tm_shape(tile_maps,
+                       bbox = st_bbox(tile_maps)) +
+                tm_rgb() +
+                tm_credits(osmaps$cit,
+                           position = c("LEFT", "BOTTOM")) +   # add citation info to the map
+                p          # Layer greenspace plot on top of basemap
+
+final_plot
+```

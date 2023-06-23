@@ -1,0 +1,146 @@
+---
+title: "01 OS GeoDataViz Toolkit"
+output: html_notebook
+---
+
+Using the OS GeoDataViz Toolkit to assist with styling of location data
+insights.
+
+## OS GeoDataViz Toolkit
+
+The OS [GeoDataViz (GDV)
+Toolkit](https://github.com/OrdnanceSurvey/GeoDataViz-Toolkit) provides a set of
+resources to help you communicate your data effectively through the design of
+compelling visuals.
+
+The toolkit provides a series of colour palettes which provide a great starting
+point for thematic map design. The palettes can be programmatically accessed via
+JSON copy in the repo.
+
+## Qualitative Styling
+
+When styling qualitative (categorical) data we need to be mindful of the number
+of distinct classes. The GDV qualitative colours supports up to eight classes.
+Beyond approximately 10 classes it becomes very difficult to design a palette
+that preserves the separation between colours allowing clear class
+identification.
+
+---
+
+```{r}
+library(sf)
+library(tmap)
+library(httr)
+library(jsonlite)
+```
+
+## Create `sf` data frame from GeoPackage (GPKG)
+
+Combine the file reading and spatial subsetting by bounding box.
+
+```{r}
+# Creating bounding box
+bbox <- st_bbox(c(xmin = 503568.1996, 
+                  xmax = 561957.4962, 
+                  ymin = 155850.7975, 
+                  ymax = 200933.9026), 
+                crs = st_crs(27700))
+
+# Convert into a 'geometry'
+bbox <- st_as_sfc(bbox)
+
+# Create an sf data.frame object from the Greenspace file
+# Can do subset using bounding box at same time as read in
+osogs <- st_read('../../data/ordnance-survey/os-open-greenspace-gb.gpkg',
+                 layer = 'greenspace_site',
+                 wkt_filter = st_as_text(bbox))  # Subset the data to Greater London
+```
+
+## Subset data frame by function
+
+Reduce the number of function categories to support qualitative styling colour
+palette integration.
+
+```{r}
+# Subset data frame by function, excluding 'Play Space' and 'Tennis Court'
+osogs_filtered <- osogs[!osogs$function. %in% c('Play Space', 'Tennis Court'), ]
+```
+
+```{r}
+# List unique function values
+unique(osogs_filtered$function.)
+```
+
+```{r}
+# Count number of unique function values
+length(unique(osogs_filtered$function.))
+```
+
+## OS Maps API ZXY resource
+
+```{r}
+# OS Maps API layer
+# Example uses Light Style in Web Mercator (EPSG:3857) projection
+layer <- 'Light_3857'
+
+# OS Data Hub project API key
+key <- '7UTXMMWsGjjIzcBmLdAGnMO6WEAQi9Ng'
+```
+
+```{r}
+# Define the tile server parameters
+url <- paste0('https://api.os.uk/maps/raster/v1/zxy/', layer,
+              '/{z}/{x}/{y}.png?key=', key)
+```
+
+## OS GeoDataViz colour palettes
+
+The OS [GeoDataViz
+toolkit](https://github.com/OrdnanceSurvey/GeoDataViz-Toolkit/tree/master/Colours)
+provides qualitative, sequential, and diverging colour palettes to support GDV
+applications.
+
+```{r}
+# GDV colour palettes JSON file
+gdv <- 'https://raw.githubusercontent.com/OrdnanceSurvey/GeoDataViz-Toolkit/master/Colours/GDV-colour-palettes-v0.7.json'
+
+# Make HTTP GET request and decode JSON
+gdv_json <- GET(url = gdv)
+gdv_json <- fromJSON(content(gdv_json))
+
+# Get colour hex values
+gdv_qual <- unlist(gdv_json$qualitative$lookup)
+
+# Show an example of the colours
+(image(1:length(gdv_qual), 1, as.matrix(1:length(gdv_qual)), 
+      col = gdv_qual,
+      xlab="", ylab = "", xaxt = "n", yaxt = "n", bty = "n"))
+```
+
+## Plot data frame ontop of interactive map
+
+Employ categorical styling via OS GeoDataViz (GDV) qualitative colour palette.
+
+```{r}
+# Generate a basic plot of the features
+p <- tm_shape(osogs_filtered) +
+      tm_polygons('function.', 
+                  pal = gdv_qual,
+                  popup.vars = FALSE)
+```
+
+```{r, fig.width = 10, fig.height = 10}
+# Change plotting mode from static to interactive
+tmap_mode('view')
+
+# Combine the features and base map
+final_plot <- p +
+                tm_basemap(server = url)
+
+final_plot
+```
+
+```{r}
+# Change back to the static plotting mode
+tmap_mode('plot')
+```

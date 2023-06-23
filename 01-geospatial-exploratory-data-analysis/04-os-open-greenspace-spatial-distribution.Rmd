@@ -1,0 +1,222 @@
+---
+title: "04 OS Open Greenspace Spatial Distirbution"
+output: html_notebook
+---
+
+Analysing the spatial distribution of OS Open Greenspace.
+
+```{r}
+library(sf)
+library(tmap)
+library(maptiles)
+```
+
+
+## Create an `sf` object from GeoPackage (GPKG)
+
+Repeat the initial steps from the last notebook to load the Greenspace
+GeoPackage.
+
+```{r}
+# Create an sf data.frame object from the Greenspace file
+osogs <- st_read('../../data/ordnance-survey/os-open-greenspace-gb.gpkg',
+                 layer = 'greenspace_site')
+```
+
+## Plot `sf` data frame
+
+Visualising a dataset of relatively small MULTIPOLYGON geometries at a GB
+(small) scale can pose a challenge. If the data is plotted against a white
+background it can be difficult to interpret the spatial distribution.
+
+Changing the geometry type of the dataset or increasing the contrast between the
+data overlay and the basemap can produce a cleareer output. Deriving the
+centroid POINT geometry of each feature offers a solution as marker size
+adjustments can make features larger and clearer on the map.
+
+The three example plots below explore different styles. Which do you think is
+most effective?
+
+## Plot A
+
+* No change to source MultiPolygon geometry.
+* White background.
+
+```{r, fig.width = 6, fig.height = 8}
+# Basic map using built-in plotting functionality
+# Note: st_* call to retrieve just the geometry column
+plot(st_geometry(osogs), 
+     col = '#00cd6c', 
+     border = NA, 
+     main = 'Spatial Distribution of OS Open Greenspace - Plot A')
+```
+
+```{r, fig.width = 6, fig.height = 8}
+# Basic map using tmap's "Quick Thematic Map" functionality
+qtm(osogs, 
+    fill = '#00cd6c', 
+    borders = NULL, 
+    frame = FALSE,
+    title = 'Spatial Distribution of OS Open Greenspace - Plot A')
+
+# can't see base geographic info clearly
+```
+
+### Plot B
+
+* Source MultiPolygon geometry converted to centroid Point geometry.
+* White background.
+* Marker size and opacity can be flexed to accommodate feature density and
+distribution.
+
+```{r, fig.width = 6, fig.height = 8}
+# Centroid map using tmap functionality
+tm_shape(st_centroid(osogs)) + 
+  tm_dots(col = '#00cd6c',
+          alpha = 0.1) +
+  tm_layout(frame = FALSE,
+            title = 'Spatial Distribution of OS Open Greenspace - Plot B')
+# dots are same size - no info on area
+```
+
+### Plot C
+
+* Source MultiPolygon geometry converted to centroid Point geometry.
+* Feature colour selected to contrast with background.
+* Marker size and opacity can be flexed to accommodate feature density and
+distribution.
+
+```{r, fig.width = 6, fig.height = 8}
+# Centroid map using tmap functionality
+tm_shape(st_centroid(osogs)) + 
+  tm_dots(col = '#ff1f5b',
+          alpha = 0.1) +
+  tm_layout(bg.color = '#efeae4',
+            frame = FALSE,
+            title = 'Spatial Distribution of OS Open Greenspace - Plot C')
+```
+
+## Spatially subset data frame
+
+Using coordinates to spatially subset by bounding box (BBOX).
+
+```{r}
+# Subset the data by intersection with BBOX
+
+# Greater London bounding box
+bbox <- st_bbox(c(xmin = 503568.1996, 
+                  xmax = 561957.4962, 
+                  ymin = 155850.7975, 
+                  ymax = 200933.9026), 
+                crs = st_crs(27700))
+
+# Convert into a 'geometry'
+bbox <- st_as_sfc(bbox)
+
+# Spatial subsetting/filtering
+osogs_filtered <- osogs[bbox, ]
+```
+
+```{r}
+nrow(osogs_filtered)
+```
+
+```{r}
+# Reproject to Web Mercator (EPSG: 3857)
+# Prepare for basemap tiles
+osogs_filtered <- st_transform(osogs_filtered, crs = 3857)
+```
+
+## Add OS Maps API base map to `tmap` plot
+
+```{r}
+# OS Maps API layer
+# Example uses Light Style in Web Mercator (EPSG:3857) projection
+layer <- 'Light_3857'
+
+# OS Data Hub project API key
+key <- '7UTXMMWsGjjIzcBmLdAGnMO6WEAQi9Ng'
+
+# OS Data Hub base path - https://api.os.uk
+# OS Maps API ZXY endpoint path - /maps/raster/v1/zxy/
+url <- paste0('https://api.os.uk/maps/raster/v1/zxy/', layer,
+              '/{z}/{x}/{y}.png?key=XXXXXX')  # Note the placeholder key
+```
+
+```{r}
+# Define the tile server parameters for maptiles
+osmaps <- list(src = 'OS Maps',
+               q = url,
+               sub = '',
+               cit = paste0('Contains OS data © Crown copyright and database rights ', 
+                            format(Sys.Date(),"%Y"), '.'))
+```
+
+```{r}
+# Download tiles and compose base map raster
+tile_maps <- get_tiles(x = st_bbox(osogs_filtered),
+                       provider = osmaps,
+                       zoom = 10,  # If omitted, will search for 'best' zoom
+                       crop = TRUE,
+                       cachedir = tempdir(),  # Where to store the download
+                       apikey = key,
+                       verbose = FALSE)
+```
+
+## Plot subplots showing the spatial distribution by function
+
+Visualise the spatial distribution of OS Open Greenspace features by function
+using subplots.
+
+```{r}
+# Subset features to exclude some functions
+osogs_filtered <- osogs_filtered[!osogs_filtered$function. %in% c('Play Space', 
+                                                                  'Tennis Court'), ]
+
+# Return unique functions
+unique(osogs_filtered$function.)
+```
+
+```{r}
+length(unique(osogs_filtered$function.))
+```
+
+## OS GeoDataViz colour palettes
+
+The OS [GeoDataViz
+toolkit](https://github.com/OrdnanceSurvey/GeoDataViz-Toolkit/tree/master/Colours)
+provides qualitative, sequential, and diverging colour palettes to support GDV
+applications.
+
+```{r}
+# OS GDV qualitative colour palette
+colours <- c('#FF1F5B','#00CD6C','#009ADE','#AF58BA',
+             '#FFC61E','#F28522','#A0B1BA','#A6761D')
+```
+
+```{r}
+length(colours)
+```
+
+```{r, fig.width = 10, fig.height = 10}
+# Create figure and subplots
+
+# basemap layer
+base <- tm_shape(tile_maps,
+                 bbox = st_bbox(tile_maps)) +
+          tm_rgb() +
+          tm_credits(osmaps$cit,
+                     position = c("LEFT", "BOTTOM"))
+
+# plot sf
+base + 
+tm_shape(st_centroid(osogs_filtered)) +
+  tm_dots(col = 'function.', 
+          palette = colours,
+          legend.show = FALSE) +
+  tm_layout(main.title = 'OS Open Greenspace Spatial Distributions by Function',
+            main.title.position = 'center') +
+  tm_facets(by = 'function.',
+            ncol = 2)
+
+```

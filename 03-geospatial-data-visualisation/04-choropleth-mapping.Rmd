@@ -1,0 +1,86 @@
+---
+title: "04 Choropleth Mapping"
+output: html_notebook
+---
+
+Visually exploring different dat classification schemes for choropleth map
+classification.
+
+```{r}
+library(sf)
+library(tmap)
+library(httr)
+library(jsonlite)
+```
+
+## Create data frame from GeoPackage (GPKG)
+
+```{r}
+# Create an `sf` data frame from a GeoPackage (GPKG)
+osogs_pop_est_lad_merged <- st_read('../../data/lad-os-open-greenspace-area-per-head.gpkg')
+```
+
+```{r}
+# List data frame columns
+names(osogs_pop_est_lad_merged)
+```
+
+```{r}
+# Return head of data frame
+head(osogs_pop_est_lad_merged)
+```
+
+## OS GeoDataViz colour palettes
+
+The OS [GeoDataViz
+toolkit](https://github.com/OrdnanceSurvey/GeoDataViz-Toolkit/tree/master/Colours)
+provides qualitative, sequential, and diverging colour palettes to support GDV
+applications.
+
+```{r}
+# GDV colour palettes JSON file 
+gdv <- 'https://raw.githubusercontent.com/OrdnanceSurvey/GeoDataViz-Toolkit/master/Colours/GDV-colour-palettes-v0.7.json'
+
+# Make HTTP GET request and decode JSON
+gdv_json <- GET(url = gdv)
+gdv_json <- fromJSON(content(gdv_json))
+
+# Get colour hex values
+gdv_seq <- unlist(gdv_json$sequential$m2)
+
+# Show an example of the colours
+(image(1:length(gdv_seq), 1, as.matrix(1:length(gdv_seq)), 
+      col = gdv_seq,
+      xlab="", ylab = "", xaxt = "n", yaxt = "n", bty = "n"))
+```
+
+## Classification schemes
+
+Demonstrate four classification schemes.
+
+```{r}
+# Classification styles
+schemes <- c('equal', 'jenks', 'quantile', 'sd')
+titles <- c('Equal Interval', 'Natural Breaks', 'Quantile', 'Std. Dev.')
+```
+
+```{r}
+# List to store maps
+map_list <- vector('list', length = length(schemes))
+
+# Iterate over schemes and create individual maps
+for(i in 1:length(schemes)){
+  map_list[[i]] <- tm_shape(osogs_pop_est_lad_merged) +
+                    tm_polygons(col = 'area2population',
+                                palette = gdv_seq,
+                                n = 5,
+                                style = schemes[i]) +
+                    tm_layout(main.title = titles[i])
+}
+```
+
+```{r, fig.height=10, fig.width=10}
+# Create combined plot
+tmap_arrange(map_list, ncol = 2)
+```
+

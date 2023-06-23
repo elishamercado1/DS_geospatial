@@ -1,0 +1,681 @@
+---
+title: "01 Option B - Exercise"
+output: html_document
+---
+
+---
+# Visualising the Spatial Distirbution of MSOA Accessibility to Green Space
+
+Geospatial-statistical analysis of MSOA accessibility to publicly accessible
+green spaces in Greater London.
+
+---
+
+## National Statistics Postcode Lookup
+
+* The [National Statistics Postcode Lookup
+(NSPL)](https://www.ons.gov.uk/methodology/geography/geographicalproducts/postcodeproducts)
+can be used to allocate your source statistics at postcode-level to a wide range
+of higher UK statistical and administrative geographies.
+* The NSPL does the by allocating UK postcodes to Output Areas (OA). These OAs
+are then referenced to a wide range of higher statistical geographies (for
+example, local authority districts [LADs]) by a best-fit methodology that uses
+Census population data.
+* The postcode centroid point geometry provides the 1-meter grid reference
+location (x, y) of the mean address in the postcode snapped to the nearest
+property.
+* We'll use the NSPL for postcode centroid point geometries and for the
+references to Middle Layer Super Output Area (MSOA) and Regions.
+
+## OS Open Greenspace
+
+The OS OpenData product [OS Open
+Greenspace](https://www.ordnancesurvey.co.uk/business-government/products/open-map-greenspace)
+depicts the location and extent of spaces such as parks and sports facilities
+that are likely to be accessible to the public. Where appropriate, it also
+includes Access Points to show how people get into these sites. Its primary
+purpose is to enable members of the public to find and access greenspaces near
+them for exercise and recreation.
+
+![Example of the OS Open Greenspace product.](https://beta.ordnancesurvey.co.uk/img-assets/products/greenspace-open-london.x5201e7a5.jpg?w=1242&h=828&crop=828%2C828%2C207%2C0&f=webp?q=100&crop=2270,1422,0,0&w=1000)
+
+## Middle Layer Super Output Areas
+
+* Middle Layer Super Output Areas (MSOAs) are an ONS census geography product
+comprised of nested OAs and LSOAs and providing a geographical unit for census
+data releases.
+* The postcodes in the NSPL are allocated to OAs by plotting each postcode's
+centroid directly into the OA boundaries. The postcodes are then allocated to
+the higher geographies that the postcode's OA falls in by plotting the OA's
+population-weighted centroid into the digital boundary of the higher geography.
+A population-weighted centroid is a grid reference that in a single summary
+point reflects the spatial distribution of the 2021 Census population in the OA.
+
+---
+
+```{r}
+library(sf)
+library(httr)
+library(jsonlite)
+library(tmap)
+library(dplyr)
+library(ggplot2)
+```
+
+## NSPL
+
+1. Read the NSPL CSV data into a data frame.
+2. Return the head of the data frame
+3. List all columns of the data frame.
+4. Count the rows.
+5. Subset the data frame only keeping live postcodes (`doterm` is `NULL`)
+referencing the Greater London region (`rgn` equal to `E12000007`).
+6. Rename the following columns: `oseast1m` to `x`, `osnrth1m` to `y`, `msoa11`
+to `msoa11cd` and `rgn` to `rgn20cd`.
+7. Count the rows in the subset.
+8. Construct an `sf` object from the data frame with the geometry column
+representing a point type constructed from the postcode centroid x and y
+coordinates.
+9. Assign the data frame CRS to British National Grid (EPSG:27700).
+10. Return the CRS assignment.
+11. Count rows by geometry type.
+12. Check geometry validity.
+13. Create a static plot of the subset `sf` object. Use a qualitative colour hex
+value from the GDV toolkit and reduce the marker size and marker transparency to
+create a dot-density map.
+
+```{r}
+# Read the NSPL CSV data into a data frame
+nspl <- <FILL-IN>('../../data/<FILL-IN>/nspl-feb-2023-uk.csv')
+
+# Return the head of the data.frame
+<FILL-IN>
+```
+
+```{r}
+# List all columns of the data frame
+<FILL-IN>
+```
+
+```{r}
+# Count the rows
+<FILL-IN>
+```
+
+```{r}
+# Subset the data frame only keeping live postcodes
+nspl <- nspl[<FILL-IN> &  # Live postcodes have a NA termination date in the 'doterm' column
+               nspl$rgn == 'E12000007',  # Already subset to the Greater London Region (GSS code equal to 'E12000007')
+             c('pcds', 'oseast1m', 'osnrth1m', 'msoa11', 'rgn')]
+```
+
+```{r}
+# Rename columns
+names(nspl) <- replace(setNames(nm = names(nspl)), 
+                       c('oseast1m', 'osnrth1m', 'msoa11', 'rgn'),  # Original names
+                       c('x', 'y', <FILL-IN>, <FILL-IN>))  # Modified names
+```
+
+```{r}
+# Count the rows in the subset
+<FILL-IN>
+```
+
+```{r}
+# Construct an sf object from the data frame.
+# The geometry column is a point type constructed from the postcode centroid x and y
+nspl_gdf <- st_as_sf(nspl, 
+                     coords = c(<FILL-IN>, <FILL-IN>),  # Specify the columns with coordinates
+                     crs = <FILL-IN>)  # Set CRS to BNG (EPSG:27700)
+```
+
+```{r}
+# Return the CRS assignment
+<FILL-IN>
+```
+
+```{r}
+# Count row by geometry type
+table(<FILL-IN>(nspl_gdf))
+```
+
+```{r}
+# Check geometry validity
+table(<FILL-IN>(nspl_gdf))
+```
+
+```{r, fig.width = 10, fig.height = 10}
+# Create a static plot of the subset data frame
+tmap_mode('plot')
+nspl_plot <- tm_shape(nspl_gdf) + 
+              tm_dots(col = <FILL-IN>, alpha = <FILL-IN>)
+
+nspl_plot
+```
+
+## OS Open Greenspace
+
+1. Read the `greenspace_site` layer from the GPKG dataset into an `sf` data
+frame.
+2. Subset columns (keeping only `id`, `function` and `geometry`) and filter for
+green space function `Public Park Or Garden` or `Playing Field`.
+3. Return the head of the data frame
+4. Count the rows.
+5. Count rows by geometry type.
+6. Check geometry validity.
+7. Create a static plot of the centroid of each MultiPolygon geometry. Use a
+qualitative colour hex value from the GDV toolkit.
+
+```{r}
+# Read the GreenspaceSite layer from the GPKG dataset
+osogs <- <FILL-IN>('../../data/ordnance-survey/<FILL-IN>',
+                 <FILL-IN> = 'greenspace_site')  # Specify the GPKG feature table / layer
+
+# Subset columns and filter for green space function 'Public Park Or Garden' or 'Playing Field'
+osogs <- osogs[osogs$function. %in% c(<FILL-IN>, <FILL-IN>),
+               c('id', 'function.', 'geometry')]
+
+# Return the head of the data frame
+<FILL-IN>
+```
+
+```{r}
+# Count the rows
+<FILL-IN>
+```
+
+```{r}
+# Count rows by geometry type
+table(<FILL-IN>(osogs))
+```
+
+```{r}
+# Check geometry validity
+table(<FILL-IN>(osogs))
+```
+
+```{r, fig.width = 6, fig.height = 8}
+# Create a static plot of the centroid of each MultiPolygon geoemtry
+# Follow GDV best practice
+osogs_plot <- tm_shape(st_<FILL-IN>(osogs)) + 
+                tm_dots(col = <FILL-IN>, alpha = <FILL-IN>)
+
+osogs_plot
+```
+
+## Spatially join the NSPL and OS Open Greenspace
+
+1. Spatially join the rows within the `nspl` and `osogs` data frames where pairs
+of geometries are the closest feature.
+  * While you can use `st_join` or `st_is_within_distance` these functions can
+  be quite slow.
+  * Using `st_nearest_feature` or `st_intersects` (with a buffer) tends to be
+  much faster.
+  * Create a column called 'distance' which shows the distance between the pairs
+  of geometries.
+  * Ensure that every postcode in the `nspl` data frame is retained within the
+  join.
+2. Return the head of the data frame.
+3. Count the rows.
+4. Count the number of unique postcodes - what can you glean by comparing
+against the total row count?
+5. Check that the number of unique postcodes is equal to the number of postcodes
+in Greater London in the subset of the NSPL.
+6. Calculate the minimum distance to a green space per MSOA Do this by
+grouping by the `msoa11cd` column of the nearest distance per postcode data
+frame.
+7. Return the head of the data frame.
+8. Return the data frame descriptive statistics.
+9. Plot an MSOA-distance histogram.
+10. Population a new 'rank' column binning each MSOA into one of seven classes,
+ordering by the mean distance.
+11. Return the head of the data frame.
+12. Count the rows.
+13. Check that the number of MSOAs is equal to the number of unique MSOAs in
+Greater London in the subset of the NSPL.
+
+```{r}
+# Spatially join the rows within the nspl and osogs data.frames 
+
+# Find nearest green space
+nearId <- st_nearest_feature(<FILL-IN>, <FILL-IN>)
+# This returns a vector with a row ID in `osogs` for each NSPL record
+
+# Join the two data frames by expansion
+nspl2osogs <- cbind(<FILL-IN>, osogs[nearId, ])
+
+# Examine this new data.frame
+<FILL-IN>
+```
+
+```{r}
+# Calculate the distance between each pair: NSPL -- green space
+nspl2osogs$distance <- st_distance(nspl2osogs$<FILL-IN>, 
+                                   nspl2osogs$<FILL-IN>, 
+                                   by_element = <FILL-IN>)
+# Remove 'units'
+nspl2osogs$distance <- as.numeric(<FILL-IN>)
+
+# Drop the green space geometry (no longer needed)
+nspl2osogs$geometry.1 <- NULL
+```
+
+```{r}
+# Count the rows
+<FILL-IN>
+```
+
+```{r}
+# Count the number of unique postcodes
+<FILL-IN>(<FILL-IN>(nspl2osogs$pcds))
+```
+
+```{r}
+# Check that the number of unique postcodes is equal to the postcodes in the
+# Greater London subset of the NSPL
+length(<FILL-IN>(nspl2osogs$pcds)) == <FILL-IN>(unique(nspl_gdf$pcds))
+```
+
+```{r}
+# Calculate the mean distance to a green space per MSOA
+# Do this by grouping by the msoa11cd of the distance 
+msoa_mean <- aggregate(list('distance' = nspl2osogs$<FILL-IN>), 
+                       by = list('msoa11cd' = nspl2osogs$<FILL-IN>), 
+                       <FILL-IN>)
+
+# Return the head of the data frame
+<FILL-IN>
+```
+
+```{r}
+# Return data frame descriptive statistics
+<FILL-IN>(msoa_mean)
+```
+
+```{r, fig.width = 8, fig.height = 6}
+# Plot a MSOA-mean distance histogram
+ggplot(msoa_mean, aes(x = <FILL-IN>)) +
+  geom_histogram(bins = <FILL-IN>,
+                 fill = <FILL-IN>, 
+                 color = <FILL-IN>) +
+  xlab('Area') +
+  ylab('Frequency') +
+  ggtitle('Distribution of Mean MSOA Postcode to Greenspace Distances')
+```
+
+```{r}
+# Populate a new 'rank' column binning each MSOA into one of seven classes
+# ordering by the mean distance.
+# Specify rank labels 1-7.
+
+# Get quantile break points for seven groups
+qdist <- quantile(msoa_mean$<FILL-IN>, 
+                  probs = (0:7) / 7)
+
+# Populate rank column
+msoa_mean$rank <- cut(<FILL-IN>, 
+                      breaks = <FILL-IN>, 
+                      labels = 1:7,
+                      include.lowest = TRUE)
+
+# Return head of data frame
+<FILL-IN>
+```
+
+```{r}
+# Count the rows
+<FILL-IN>
+```
+
+```{r}
+# Check that the number of MSOAs is equal to the number of unique MSOAs in
+# Greater London in the subset of the NSPL
+<FILL-IN>(msoa_mean) == <FILL-IN>(<FILL-IN>(nspl$msoa11cd))
+```
+
+## MSOA Boundaries
+
+1. Read the MSOA GeoPackage (GPKG) dataset into an `sf` data frame.
+2. Return the head of the data frame.
+3. Count the rows.
+4. Subset the columns keeping only `MSOA11CD` and `SHAPE`.
+5. Rename `MSOA11CD` column to `msoa11cd`.
+6. Count rows by geometry type.
+7. Check geometry validity.
+8. Inner join (by attribute) the rows within this `msoa` data frame and the
+`msoa_mean` data frame on the `msoa11cd` column.
+9. Return the head of the data frame.
+10. Count the rows.
+
+```{r}
+# Read GPKG into an `sf` data.frame.
+msoa <- st_read('../../data/<FILL-IN>/msoa-dec-2011-boundaries-bfc-ew.gpkg')
+
+# Return the head of the data.frame
+<FILL-IN>
+```
+
+```{r}
+# Count the rows
+<FILL-IN>
+```
+
+```{r}
+# Subset the columns
+msoa <- msoa[, c(<FILL-IN>, <FILL-IN>)]
+```
+
+```{r}
+# Rename the columns
+names(msoa)[1] <- <FILL-IN>
+# If you try to rename the geometry column, need to use `st_geometry(x)<-`
+```
+
+```{r}
+# Count the rows by geometry type
+<FILL-IN>(<FILL-IN>(msoa))
+```
+
+```{r}
+# Check geometry validity
+<FILL-IN>(<FILL-IN>(msoa))
+```
+
+```{r}
+# Inner join (by attribute) the rows within the msoa data frame and the
+# msoa_mean data frame on the `msoa11cd` column
+msoa_mean_gdf <- merge(msoa, 
+                       msoa_mean, 
+                       by = <FILL-IN>, 
+                       all.x = <FILL-IN>)  # creates an inner join
+
+# Return the head of the data frame
+<FILL-IN>
+```
+
+```{r}
+# Count the rows
+<FILL-IN>
+```
+
+## OS GeoDataViz Sequential Palette
+
+1. Download and decode the JSON representations of the OS [GDV colour
+palettes](https://raw.githubusercontent.com/OrdnanceSurvey/GeoDataViz-Toolkit/master/Colours/GDV-colour-palettes-v0.7.json)
+via an HTTP GET request.
+2. Access the `m2` colour palette within the `sequential` palette group.
+3. Return and display the colour map. 
+
+```{r}
+# Download and decode the JSON representation of the OS GDV colour palettes via
+# an HTTP GET request
+gdv <- <FILL-IN>
+
+# Make HTTP GET request and decode JSON
+gdv_json <- GET(url = <FILL-IN>)
+gdv_json <- fromJSON(<FILL-IN>(gdv_json))
+
+# Get colour hex values
+gdv_cmap <- gdv_json$<FILL-IN>$<FILL-IN>
+
+# Show an example of the colours
+(image(1:length(<FILL-IN>), 1, as.matrix(1:length(<FILL-IN>)), 
+      col = <FILL-IN>,
+      xlab="", ylab = "", xaxt = "n", yaxt = "n", bty = "n"))
+```
+
+### Static Map
+
+1. Create a static plot overlaying the centroids of the `osogs` spatial data
+frame, within the Greater London bounding region, on top of a choropleth map
+showing MSOA mean distance to green space, from the `msoa_mean_gdf` spatial data
+frame. The map should be styled using GDV best practice and the mean distance
+coloured using the `m2` GDV colour map against the `rank` bin column.
+
+```{r}
+# Store a plot of the msoa_mean_gdf data frame
+msoa_plot <- tm_shape(<FILL-IN>) + 
+                <FILL-IN>(col = <FILL-IN>,  # column name
+                            palette = <FILL-IN>,  # colour palette
+                            style = 'cat')  # use a categorical classification
+```
+
+```{r}
+# Clip the osogs data frame to the bounding box of Greater London
+bbox <- st_as_sfc(st_bbox(msoa_mean_gdf), crs = 27700)
+
+# Filter green space based on intersecting features
+osogs <- osogs[bbox, ]
+```
+
+```{r, fig.width = 10, fig.height = 10}
+# Plot the centroid of each geometry in the osogs data frame and add to the msoa
+# plot
+final_plot <- <FILL-IN> + 
+                tm_shape(st_centroid(<FILL-IN>)) + 
+                tm_dots(col = <FILL-IN>, alpha = <FILL-IN>)
+
+<FILL-IN>
+```
+
+### Interactive Map
+
+1. Create an interactive map using `tmap` (set `tmap_mode('view')`) showing MSOA
+mean distance to green space, from the `msoa_mean_gdf` data frame. The map
+should be styped using GDV best practices and the mean distance coloured using
+the `m2` GDV colour map against the `rank` bin column. The map should use an OS
+Maps API Light Style 3857 base map.
+  * Note: This step can use the `msoa_plot` as an overlay to a basemap.
+
+```{r}
+# OS Maps API layer
+# Example uses Light Style in Web Mercator (EPSG:3857) projection
+layer <- <FILL-IN>
+
+# OS Data Hub project API key
+key <- <FILL-IN>
+```
+
+```{r}
+# Define the tile server parameters for the basemap
+url <- <FILL-IN>
+```
+
+```{r, fig.width = 10, fig.height = 10}
+# Create the interactive map the OS Maps API base map
+tmap_mode('view')
+
+m <- <FILL-IN> +  # starting with the previous map layer
+      tm_basemap(server = <FILL-IN>)
+
+# m
+```
+
+```{r}
+# Return setting to static plot mode.
+tmap_mode('plot')
+```
+
+---
+
+## Extension: Quantifying accessibility via a different metric
+
+Finding the distance to each postcode's nearest green space isn't the only way
+to quantify accessibility to green space. Considering that the area (utility) of
+a green space site may be an important factor in conjunction with distance, one
+alternative could be to measure the total area of green space within a certain
+distance of each postcode.
+
+1. Create a new data frame by buffering the NSPL postcode POINT geometries in
+the `nspl_gdf` data.frame by a threshold distance.
+2. Add a new column to the data frame representing the area of the new POLYGON
+geometry for each postcode.
+3. Return the head of the data frame.
+
+```{r}
+# Distance (buffer) threshold in metres
+distance_threshold <- <FILL-IN>
+
+# Buffer the postcode POINT geometries by the threshold distance.
+# This transforms the geometry type from POINT --> POLYGON
+pcds_buffer <- st_buffer(<FILL-IN>, dist = <FILL-IN>)
+
+# Add a new column representing the area of the new POLYGON geometry for each
+# postcode.
+pcds_buffer$threshold_area <- <FILL-IN>(pcds_buffer)
+
+# Return the head of the data frame
+<FILL-IN>
+```
+
+4. Create a new data frame by evaluating the intersection (shared geometry)
+between the buffered postcode POLYGON geometries and the OS Open GreenSpace data
+in the `osog`s data frame.
+
+```{r}
+# Evaluate the intersection (shared geometry) between the buffered postcode
+# POLYGON geometries and the OS Open GreenSpace data in the `osogs` data frame.
+pcds_buffer_osogs_int <- st_intersection(<FILL-IN>, <FILL-IN>)
+```
+
+5. Find the area of overlap.
+  * Option 1: (Faster)
+    + Add a new column to the data frame representing the area of each overlay.
+    + Aggregate (sum) the area parts by postcode. 
+  * Option 2: (Slow!)
+    + Dissolve (spatially union) the intersection geometries by postcode
+    + Add a new column to the data frame representing the area of the
+    intersection geometry by postcode.
+6. Return the head of the data frame.
+
+```{r}
+# Option 1
+
+# Add a new column to the data frame representing the area of the intersection
+# geometry for each part.
+pcds_buffer_osogs_int$area <- <FILL-IN>(pcds_buffer_osogs_int)
+
+# Aggregate (sum) the area of parts for each postcode
+pcds_buffer_osogs_int <- aggregate(list('area' = <FILL-IN>),
+                                   by = list('pcds' = <FILL-IN>),
+                                   sum)
+
+# Return the head of the data frame (now a tibble)
+<FILL-IN>
+```
+
+```{r, eval=FALSE}
+# Option 2
+
+# Evaluate the intersection (shared geometry) between the buffered postcode
+# POLYGON geometries and the OS Open GreenSpace data in the `osogs` data frame.
+pcds_buffer_osogs_int <- st_intersection(<FILL-IN>, <FILL-IN>)
+
+# Dissolve (spatially union) the intersection geometries by postcode
+# Caution: this step may take some time!
+# Note: using `dplyr` tools
+pcds_buffer_osogs_int <- group_by(<FILL-IN>, <FILL-IN>) %>% 
+                          summarise()
+
+# Add a new column to the data frame representing the area of the intersection
+# geometry by postcode.
+pcds_buffer_osogs_int$area <- <FILL-IN>(pcds_buffer_osog_int)
+
+# Return the head of the data frame (now a tibble)
+<FILL-IN>
+```
+
+7. A subset of postcodes will not be represented in the data because the
+buffered POLYGON geometry does not intersect any of the OS Open GreenSpace
+feature geometries. Add the missing subset of postcodes to the data by merging
+to the buffered postcode data.
+8. Add a new column to the data frame representing a normalised area metric -
+divide the intersection geometry area by the area of the buffered postcode
+geometry.
+9. Set the normalised area metric to a value of 0 for any missing data.
+10. Return the head of the data frame.
+
+```{r}
+# Add the missing subset of postcodes to the data by a left merge
+pcds_buffer_osogs_int <- merge(st_drop_geometry(pcds_buffer),  # Exclude geometry
+                               <FILL-IN>, 
+                               by = <FILL-IN>,  # Shared column name
+                               all.x = <FILL-IN>)  # Left join
+# Add a new column to the data frame representing a normalised area metric -
+# divide the intersection geometry area by the area of the buffered postcode
+# geometry.
+pcds_buffer_osogs_int$area_normalised <- pcds_buffer_osogs_int$area / 
+                                          pcds_buffer_osogs_int$threshold_area
+# Remove units
+pcds_buffer_osogs_int$area_normalised <- as.numeric(pcds_buffer_osogs_int$area_normalised)
+
+# Set the normalised area metric to 0 anywhere the value is missing
+pcds_buffer_osogs_int[is.na(pcds_buffer_osogs_int$area_normalised), 
+                      '<FILL-IN>'] <- 0
+
+# Return the head of the data frame
+<FILL-IN>
+```
+
+11. Test whether the number of rows in the NSPL and postcode normalised area
+datasets are equal.
+
+```{r}
+# Test whether the number of rows in the NSPL and postcode normalised area
+# datasets are equal.
+<FILL-IN>(nspl) == <FILL-IN>(pcds_buffer_osogs_int)
+```
+12. Plot a histogram of the distribution of postcode normalised area values.
+
+```{r}
+# Plot a histogram of the distribution of postcode normalised area values
+# The normalised area metric is very biased towards small values
+# Right-skewed (long right tail)
+ggplot(pcds_buffer_osogs_int, aes(x = <FILL-IN>)) +
+  <FILL-IN>(fill = <FILL-IN>, bins = <FILL-IN>)
+```
+13. Summarise the postcode normalised area at MSOA-level by calculating the mean
+area by MSOA.
+
+```{r}
+# Summarise the postcode normalised area at MSOA-level by calculating the mean
+# area by MSOA
+
+# Subset the columns
+pcds_buffer_osogs_int <- pcds_buffer_osogs_int[, c(<FILL-IN>, <FILL-IN>)]
+
+# Group by msoa11cd key
+msoa_area <- aggregate(list('area_normalised' = pcds_buffer_osogs_int$<FILL-IN>),
+                       by = list('msoa11cd' = pcds_buffer_osogs_int$<FILL-IN>),
+                       <FILL-IN>)
+
+# Retain all MSOA records by merging back to the MSOA data frame
+msoa_area_gdf <- merge(<FILL-IN>, msoa_area, by = 'msoa11cd')
+```
+
+14. Create a static plot representing the spatial distribution in MSOA mean
+postcode normalised area. Bin the data into seven equal bins and style the
+classes using a sequential OS GDV colour palette. Overlay the source OS Open
+GreenSpace MULTIPOLYGON feature data ontop of the thematic map.
+
+```{r, fig.width = 10, fig.height = 10}
+# Plot the MSOA mean, normalised area
+msoa_plot <- <FILL-IN>(msoa_area_gdf) + 
+              tm_polygons(col = 'area_normalised', 
+                          n = <FILL-IN>,
+                          style = 'quantile',
+                          palette = rev(<FILL-IN>))
+
+# Plot the green space MULTIPOLYGONS
+# Transparent faces and less transparent edges
+osogs_plot <- tm_shape(osogs) + 
+                <FILL-IN>(col = <FILL-IN>, alpha = <FILL-IN>, 
+                            border.col = <FILL-IN>, border.alpha = <FILL-IN>)
+
+# Combine plots and display
+(<FILL-IN> + <FILL-IN>)
+```
+
+
+
+

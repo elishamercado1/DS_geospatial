@@ -1,0 +1,95 @@
+---
+title: "01 Read OS Open Greenspace"
+output: html_notebook
+---
+
+A recommended approach to geospatial exploratory data analysis given a new
+geospatial dataset.
+
+## GeoPackage
+
+The [GeoPackage](https://www.geopackage.org/) (GPKG) is an open geospatial data
+format enabling the storage of geospatial data within a SQLite database. The
+[SQLite database](https://www.sqlite.org/index.html) provides a lightweight and
+portable database storage solution. Each dataset is stored a feature table
+within the database and can be queried directly using SQL or via spatial
+applications including the `R` geospatial vector package
+[`sf`](https://r-spatial.github.io/sf/index.html).
+
+## `sf`
+
+[`sf`](https://r-spatial.github.io/sf/index.html) extends the `data.frame` or
+`tibble` objects with a list column containing simple feature geometries to
+allow spatial operations. Geometric operations are performed by GEOS and S2 for
+geometric operations, GDAL for file access and PROJ for coordinate reference
+system operations.
+
+## OS Open Greenspace
+
+The OS OpenData product [OS Open
+Greenspace](https://www.ordnancesurvey.co.uk/business-government/products/open-map-greenspace)
+depicts the location and extent of spaces such as parks and sports facilities
+that are likely to be accessible to the public. Where appropriate, it also
+includes Access Points to show how people get into these sites. Its primary
+purpose is to enable members of the public to find and access greenspaces near
+them for exercise and recreation.
+
+![Example of OS Open Greenspace](https://beta.ordnancesurvey.co.uk/img-assets/products/greenspace-open-london.x5201e7a5.jpg?w=1242&h=828&crop=828%2C828%2C207%2C0&f=webp?q=100&crop=2270,1422,0,0&w=1000)
+
+```{r}
+library(sf)
+```
+
+---
+
+## Create an `sf` object from GeoPackage (GPKG)
+
+```{r}
+# Create an sf data.frame object from the Greenspace file
+gdf <- st_read('../../data/ordnance-survey/os-open-greenspace-gb.gpkg',
+               layer = 'greenspace_site')
+```
+
+## Return top *n* rows
+
+```{r}
+head(gdf, n = 10)
+```
+
+## Return columns
+
+```{r}
+# Return data.frame columns
+names(gdf)
+# note column name "function." - R has tried to fix it because "function" is a reserved name
+```
+## Count rows
+
+```{r}
+nrow(gdf)
+
+# Alternatively, get the dimensions of the object and take the first (rows)
+# dim(gdf)[1]
+```
+
+## Check Coordinate Reference System (CRS) assignment
+
+```{r}
+st_crs(gdf)
+```
+
+## Count rows by geometry type
+
+```{r}
+table(st_geometry_type(gdf))
+# Gived geometry type for all entries
+```
+
+## Check geometry validity
+
+```{r}
+table(st_is_valid(gdf))
+# Checks through each record for errors in geometry - eg. weird overlaps etc.
+# It returns a vector with a true or false value for each record
+# table takes that vector and counts up true/false values to summarise
+```
